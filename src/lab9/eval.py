@@ -22,7 +22,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic_evals import Case, Dataset
 
 from lab8.benchmark import prepare_from_memory, run_trial
 from lab8.console import utf8_stdio
@@ -78,6 +77,7 @@ def load_world(spec: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any
 
 
 def run_eval(shape: str, spec: dict[str, Any], seeds: list[int] | None = None) -> dict[str, Any]:
+    from pydantic_evals import Case, Dataset
     items = evalset.load_jsonl(Path(spec["eval_set"]))
     labels = json.loads(Path(spec["labels"]).read_text(encoding="utf-8"))
     world, claims = load_world(spec)
