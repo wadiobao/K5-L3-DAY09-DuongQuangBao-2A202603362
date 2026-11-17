@@ -1,0 +1,47 @@
+{
+  "calibration": "A/A",
+  "shape": "swarm",
+  "eval_set_sha": "f8df34ea9092",
+  "items": 28,
+  "seeds_a": [
+    121,
+    132,
+    143,
+    154,
+    165
+  ],
+  "seeds_b": [
+    176,
+    187,
+    198,
+    209,
+    220
+  ],
+  "metrics": {
+    "pass_rate": {
+      "items": 28,
+      "mean_a": 0.978571,
+      "mean_b": 0.978571,
+      "delta_a_minus_b": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "noise_margin_95": 0.0,
+      "ci_contains_zero": true
+    },
+    "pass_hat_5": {
+      "items": 28,
+      "mean_a": 0.892857,
+      "mean_b": 0.892857,
+      "delta_a_minus_b": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "noise_margin_95": 0.0,
+      "ci_contains_zero": true
+    }
+  },
+  "interpretation": "noise_margin_95 is the largest absolute endpoint of the paired 95% CI for A-B. Use it as an empirical noise reference for this dataset/agent/seed design; A/A alone cannot establish an absolute quality floor. Keep pass_hat_5 min provisional until a separate minimum acceptable quality target is chosen."
+}
