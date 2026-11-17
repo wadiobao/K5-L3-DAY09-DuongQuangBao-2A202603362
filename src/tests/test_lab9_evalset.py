@@ -57,3 +57,38 @@ def test_check_rejects_missing_tags(tmp_path, evalset_cli):
     result = evalset_cli("--check")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "failure_modes empty" in result.stdout
+
+def test_build_records_trace_provenance_for_each_failure_mode(tmp_path, evalset_cli):
+    result = evalset_cli("--build")
+    assert result.returncode == 0, result.stdout + result.stderr
+    item = json.loads((tmp_path / "data/eval/eval_set_v1.jsonl").read_text(encoding="utf-8"))
+    provenance = item["provenance"]
+    assert provenance["generator"] == "lab9.trace_case"
+    assert provenance["checked_by"] is None
+    assert set(provenance["from_trace"]) == set(item["failure_modes"])
+    assert all(command.startswith("python -m lab9.trace_case ") for command in provenance["from_trace"].values())
+
+
+def test_check_rejects_missing_trace_provenance(tmp_path, evalset_cli):
+    evalset_cli("--build")
+    items_path = tmp_path / "data/eval/eval_set_v1.jsonl"
+    item = json.loads(items_path.read_text(encoding="utf-8"))
+    item["provenance"]["from_trace"].pop("FM-01")
+    items_path.write_text(json.dumps(item) + "\n", encoding="utf-8")
+
+    result = evalset_cli("--check")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "missing provenance.from_trace for FM-01" in result.stdout
+
+
+def test_check_rejects_malformed_trace_command(tmp_path, evalset_cli):
+    evalset_cli("--build")
+    items_path = tmp_path / "data/eval/eval_set_v1.jsonl"
+    item = json.loads(items_path.read_text(encoding="utf-8"))
+    item["provenance"]["from_trace"]["FM-01"] = "python something else"
+    items_path.write_text(json.dumps(item) + "\n", encoding="utf-8")
+
+    result = evalset_cli("--check")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "invalid trace command for FM-01" in result.stdout
+
