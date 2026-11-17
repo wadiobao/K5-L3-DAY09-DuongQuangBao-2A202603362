@@ -19,23 +19,151 @@ from lab9.eval import SPEC, load_spec, per_item
 
 
 def integrity_check(pr: dict, base: dict, spec: dict, base_spec: dict | None = None) -> list[str]:
-    """M7 (Expert): refuse to compare reports that cannot be trusted. Return a list of problems
-    (empty = trustworthy). A gate that passes a broken report is worse than no gate.
-    Must catch at least:
-      - any metric value in pr["metrics"] that is NaN or inf
-      - len(pr["rows"]) != manifest items x len(manifest seeds)   (dropped / duplicated rows)
-      - the (item_id, seed) set of PR differs from the baseline's (cherry-picked seeds/items)
-      - pr["evaluator_failures"] non-empty, or a row whose value for a graded spec metric is
-        None (a crashed grader silently scores as "missing" and drops out of the mean)
-      - base_spec given and a threshold in spec is LOOSER than in base_spec for the same
-        eval-set version (ratchet: max may not rise, min may not fall, a blocking metric may
-        not become non-blocking, a metric may not disappear; the same for spec["slices"],
-        including dropping no_significant_drop)
-      - an item's slice tags in PR rows differ from the baseline's (relabelling an item out of a
-        slice hides its regression from the slice gate)"""
-    # TODO M7
-    return []
+    """Reject malformed reports and any same-version weakening of the metric spec."""
+    problems: list[str] = []
 
+    def add(message: str) -> None:
+        if message not in problems:
+            problems.append(message)
+
+    manifest = pr.get("manifest") or {}
+    base_manifest = base.get("manifest") or {}
+    rows = pr.get("rows")
+    base_rows = base.get("rows")
+    metrics = pr.get("metrics")
+
+    if not isinstance(rows, list):
+        add("rows must be a list")
+        rows = []
+    if not isinstance(base_rows, list):
+        add("baseline rows must be a list")
+        base_rows = []
+    if not isinstance(metrics, dict):
+        add("metrics must be an object")
+        metrics = {}
+
+    # Aggregate metrics must be finite. None is handled below for graded metrics.
+    for metric_id, value in metrics.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if value is not None:
+                add(f"metric {metric_id} is not numeric")
+        elif not math.isfinite(value):
+            add(f"metric {metric_id} is not finite")
+
+    items, seeds = manifest.get("items"), manifest.get("seeds")
+    if not isinstance(items, int) or isinstance(items, bool) or items < 0:
+        add("manifest.items must be a non-negative integer")
+    if not isinstance(seeds, list) or not seeds:
+        add("manifest.seeds must be a non-empty list")
+        seeds = []
+    if isinstance(items, int) and not isinstance(items, bool) and isinstance(seeds, list):
+        expected = items * len(seeds)
+        if len(rows) != expected:
+            add(f"row count {len(rows)} != manifest items × seeds ({expected})")
+
+    def pair_set(source_rows: list[dict], label: str) -> set[tuple[str, int]]:
+        pairs: list[tuple[str, int]] = []
+        for index, row in enumerate(source_rows):
+            if not isinstance(row, dict):
+                add(f"{label} row {index} is not an object")
+                continue
+            item_id, seed = row.get("item_id"), row.get("seed")
+            if not isinstance(item_id, str) or not item_id or not isinstance(seed, int) or isinstance(seed, bool):
+                add(f"{label} row {index} has invalid item_id/seed")
+                continue
+            pairs.append((item_id, seed))
+        if len(pairs) != len(set(pairs)):
+            add(f"{label} contains duplicate (item_id, seed) rows")
+        return set(pairs)
+
+    pr_pairs = pair_set(rows, "PR")
+    base_pairs = pair_set(base_rows, "baseline")
+    if pr_pairs != base_pairs:
+        add("(item_id, seed) pairs differ from baseline")
+
+    failures = pr.get("evaluator_failures")
+    if failures:
+        add(f"evaluator_failures is non-empty ({len(failures) if hasattr(failures, '__len__') else 'unknown'})")
+
+    metric_specs = spec.get("metrics") or []
+    # Per-row graders must produce a value for every row. Aggregate-only metrics
+    # (for example pass_hat_5 and cost_per_success) are computed after evaluation.
+    for entry in metric_specs:
+        if not isinstance(entry, dict):
+            continue
+        metric_id = entry.get("id")
+        grader = entry.get("grader")
+        row_graded = grader in ("code", "lab8.metrics.trial_pass") or any(
+            isinstance(row, dict) and metric_id in row for row in rows
+        )
+        if row_graded and metric_id:
+            for index, row in enumerate(rows):
+                if not isinstance(row, dict) or row.get(metric_id) is None:
+                    add(f"graded metric {metric_id} is missing/None in PR row {index}")
+
+    # Slice membership is part of the evaluated dataset, not mutable PR metadata.
+    def item_slices(source_rows: list[dict], label: str) -> dict[str, set[str]]:
+        result: dict[str, set[str]] = {}
+        for row in source_rows:
+            if not isinstance(row, dict) or not isinstance(row.get("item_id"), str):
+                continue
+            tags = row.get("slices") or []
+            if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+                add(f"{label} has invalid slice tags for {row['item_id']}")
+                continue
+            tag_set = set(tags)
+            item_id = row["item_id"]
+            if item_id in result and result[item_id] != tag_set:
+                add(f"{label} has inconsistent slice tags for {item_id}")
+            result[item_id] = tag_set
+        return result
+
+    pr_slices = item_slices(rows, "PR")
+    base_slices = item_slices(base_rows, "baseline")
+    for item_id in pr_slices.keys() & base_slices.keys():
+        if pr_slices[item_id] != base_slices[item_id]:
+            add(f"slice tags changed for item {item_id}")
+
+    # Ratchet only applies when both specs describe the same eval-set version.
+    if base_spec is not None and spec.get("eval_set_version") == base_spec.get("eval_set_version"):
+        current_metrics = {m.get("id"): m for m in spec.get("metrics") or [] if isinstance(m, dict) and m.get("id")}
+        previous_metrics = {m.get("id"): m for m in base_spec.get("metrics") or [] if isinstance(m, dict) and m.get("id")}
+        for metric_id, previous in previous_metrics.items():
+            current = current_metrics.get(metric_id)
+            if current is None:
+                add(f"ratchet: metric {metric_id} was removed")
+                continue
+            old_th, new_th = previous.get("threshold") or {}, current.get("threshold") or {}
+            for bound, loosened in (("max", lambda new, old: new > old),
+                                    ("min", lambda new, old: new < old)):
+                if bound in old_th and (bound not in new_th or loosened(new_th[bound], old_th[bound])):
+                    add(f"ratchet: {metric_id} {bound} threshold was loosened or removed")
+            if previous.get("blocking") and not current.get("blocking"):
+                add(f"ratchet: {metric_id} changed from blocking to non-blocking")
+            if old_th.get("no_significant_drop") and not new_th.get("no_significant_drop"):
+                add(f"ratchet: {metric_id} removed no_significant_drop")
+
+        def slice_key(entry: dict) -> tuple[str, str]:
+            return entry.get("name", ""), entry.get("metric", "")
+
+        current_slices = {slice_key(s): s for s in spec.get("slices") or [] if isinstance(s, dict)}
+        previous_slices = {slice_key(s): s for s in base_spec.get("slices") or [] if isinstance(s, dict)}
+        for key, previous in previous_slices.items():
+            current = current_slices.get(key)
+            label = f"{key[0]}/{key[1]}"
+            if current is None:
+                add(f"ratchet: slice {label} was removed")
+                continue
+            for bound, loosened in (("max", lambda new, old: new > old),
+                                    ("min", lambda new, old: new < old)):
+                if bound in previous and (bound not in current or loosened(current[bound], previous[bound])):
+                    add(f"ratchet: slice {label} {bound} threshold was loosened or removed")
+            if previous.get("blocking") and not current.get("blocking"):
+                add(f"ratchet: slice {label} changed from blocking to non-blocking")
+            if previous.get("no_significant_drop") and not current.get("no_significant_drop"):
+                add(f"ratchet: slice {label} removed no_significant_drop")
+
+    return problems
 
 def slice_check(pr: dict, base: dict, spec: dict) -> tuple[list[str], list[str]]:
     """M5 (Advanced): an average can hide a regression on a small, important slice.
