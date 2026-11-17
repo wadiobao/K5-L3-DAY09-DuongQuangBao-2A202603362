@@ -14,3 +14,27 @@ Mã và tên ngắn cố định (dùng trong `failure_modes` của eval set); n
 Quy tắc: mỗi FM phải quan sát được trên trace, không phải phỏng đoán. Tiền và approval luôn chấm bằng code.
 
 Ghi chú về bằng chứng: số thứ tự event là thứ tự dòng in ra của `python -m lab9.trace_case` (đếm từ 1). Các trace FM-01, 02, 04, 05, 06, 07, 08 lấy từ biến thể gài đúng một công tắc lỗi (cộng `no_override` để loại điểm yếu seed chia hết cho 5 của swarm gốc). FM-03 lấy trực tiếp từ `seeded_regression`.
+
+## Reproduce the v1 evidence
+
+Each command below runs one bug switch in isolation. The trace runner automatically adds
+`no_override` so the legacy seed-dependent ticket override does not contaminate another mode.
+Run from `src/`:
+
+| Mode | Reproduction |
+|---|---|
+| FM-01 | `python -m lab9.trace_case --shape leaky_trace --claim C-001 --seed 11` |
+| FM-02 | `python -m lab9.trace_case --shape ignore_denied --claim C-013 --seed 11` |
+| FM-03 | `python -m lab9.trace_case --shape ticket_trust --claim C-002 --seed 11` |
+| FM-04 | `python -m lab9.trace_case --shape sum_parts --claim C-014 --seed 11` |
+| FM-05 | `python -m lab9.trace_case --shape pre_deducted --claim C-014 --seed 11` |
+| FM-06 | `python -m lab9.trace_case --shape stale_clause --claim C-006 --seed 11` |
+| FM-07 | `python -m lab9.trace_case --shape sibling_refund --claim C-001 --seed 11` |
+| FM-08 | `python -m lab9.trace_case --shape misreport --claim C-008 --seed 11` |
+
+The v1 eval-set builder records these commands in each item's
+`provenance.from_trace`, keyed by failure-mode code. `--check` rejects missing,
+malformed, or unassigned trace references. The commands are reproducible recipes;
+they are not claims that a trace artifact was persisted. `checked_by` remains null
+until a human reviewer actually verifies the generated evidence.
+
