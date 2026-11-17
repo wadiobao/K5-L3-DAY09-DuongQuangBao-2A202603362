@@ -8,6 +8,7 @@ Reference values to self-check are in tests/test_lab9_stats.py.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import comb
 
 POS = "FAIL"   # the judge's job is to FIND failures, so FAIL is the positive class
 
@@ -75,9 +76,31 @@ def paired_bootstrap(a: Sequence[float], b: Sequence[float], *, n_resamples: int
     return float(a_arr.mean() - b_arr.mean()), float(res.confidence_interval.low), float(res.confidence_interval.high)
 
 
+def _validate_pass_k_args(n: int, c: int, k: int) -> None:
+    """Validate counts shared by pass@k and pass^k."""
+    if any(isinstance(x, bool) or not isinstance(x, int) for x in (n, c, k)):
+        raise ValueError("n, c, and k must be integers")
+    if n < 1:
+        raise ValueError("n must be at least 1")
+    if not 0 <= c <= n:
+        raise ValueError("c must be between 0 and n")
+    if not 1 <= k <= n:
+        raise ValueError("k must be between 1 and n")
+
+
+def pass_at_k(n: int, c: int, k: int) -> float:
+    """Unbiased pass@k estimator: 1 - C(n-c, k) / C(n, k).
+
+    n is the number of sampled trials, c the number that passed, and k the
+    number of attempts allowed. Returns 1 when fewer than k failures exist.
+    """
+    _validate_pass_k_args(n, c, k)
+    return 1.0 - comb(n - c, k) / comb(n, k)
+
+
 def pass_hat_k(n: int, c: int, k: int) -> float:
-    """pass^k (tau-bench, Yao et al. 2024): probability that ALL k trials drawn from n pass.
-    Unbiased estimator: C(c, k) / C(n, k). Raise ValueError if k > n.
-    pass^k <= pass@1 <= pass@k; a reliable agent keeps pass^k close to pass@1."""
-    # TODO M6
-    raise NotImplementedError
+    """Unbiased pass^k estimator: C(c, k) / C(n, k), the probability that
+    all k trials drawn without replacement pass. pass^k <= pass@1 <= pass@k.
+    """
+    _validate_pass_k_args(n, c, k)
+    return comb(c, k) / comb(n, k) if c >= k else 0.0
