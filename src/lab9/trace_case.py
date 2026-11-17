@@ -21,6 +21,11 @@ from lab9.eval import WORLD, make_task
 
 def investigate(shape: str, claim_id: str, seed: int) -> dict:
     variants.register()
+    # Allow a single bug switch as a reproducible trace shape. The no_override
+    # switch disables the legacy seed%5 ticket-trust bug, isolating this FM.
+    if shape in variants.BUGS and shape != "no_override":
+        from lab8.shapes import SHAPES
+        SHAPES[shape] = variants.make_shape(shape, {shape, "no_override"})
     claims = load_jsonl(Path("data/public_claims.jsonl"))
     labels = {c["claim_id"]: c["expected"] for c in claims}
     with tempfile.TemporaryDirectory(prefix="lab9-case-", ignore_cleanup_errors=True) as tmp:
