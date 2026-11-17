@@ -29,6 +29,21 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 
 FM_CODE = re.compile(r"FM-\d{2}")
 
+TRACE_COMMAND = re.compile(r"python -m lab9\\.trace_case --shape [a-z_]+ --claim C-\\d{3} --seed 11")
+
+# Isolated trace recipes. trace_case registers each bug switch with no_override.
+TRACE_EVIDENCE: dict[str, str] = {
+    "FM-01": "python -m lab9.trace_case --shape leaky_trace --claim C-001 --seed 11",
+    "FM-02": "python -m lab9.trace_case --shape ignore_denied --claim C-013 --seed 11",
+    "FM-03": "python -m lab9.trace_case --shape ticket_trust --claim C-002 --seed 11",
+    "FM-04": "python -m lab9.trace_case --shape sum_parts --claim C-014 --seed 11",
+    "FM-05": "python -m lab9.trace_case --shape pre_deducted --claim C-014 --seed 11",
+    "FM-06": "python -m lab9.trace_case --shape stale_clause --claim C-006 --seed 11",
+    "FM-07": "python -m lab9.trace_case --shape sibling_refund --claim C-001 --seed 11",
+    "FM-08": "python -m lab9.trace_case --shape misreport --claim C-008 --seed 11",
+}
+
+
 FAILURE_MODES: dict[str, list[str]] = {
     "C-001": ["FM-01", "FM-04", "FM-07"],
     "C-002": ["FM-01", "FM-03"],
@@ -65,7 +80,9 @@ def build(source: Path = SOURCE) -> tuple[int, int]:
             "claim_id": claim["claim_id"],
             "failure_modes": FAILURE_MODES.get(claim["claim_id"], []),
             "provenance": {"source": "lab8_public", "matrix_id": claim.get("matrix_id"),
-                           "from_trace": None, "generator": None,
+                           "from_trace": {fm: TRACE_EVIDENCE[fm] for fm in FAILURE_MODES.get(claim["claim_id"], [])
+                                          if fm in TRACE_EVIDENCE},
+                           "generator": "lab9.trace_case",
                            "label_by": "lab8_matrix", "checked_by": None},
             "split": "regression",
             "eval_set_version": VERSION,
@@ -138,6 +155,23 @@ def check(items_path: Path = ITEMS, labels_path: Path = LABELS) -> list[str]:
         problems += [f"{item['item_id']}: {fm!r} is not a failure-mode code like FM-03"
                      for fm in item.get("failure_modes") or []
                      if not str(fm).startswith("UNMAPPED:") and not FM_CODE.fullmatch(str(fm))]
+        provenance = item.get("provenance") or {}
+        if provenance.get("source") == "lab8_public":
+            trace_map = provenance.get("from_trace")
+            if not isinstance(trace_map, dict):
+                problems.append(f"{item['item_id']}: provenance.from_trace must map FM codes to trace commands")
+                trace_map = {}
+            for fm in item.get("failure_modes") or []:
+                if str(fm).startswith("UNMAPPED:") or not FM_CODE.fullmatch(str(fm)):
+                    continue
+                command = trace_map.get(fm)
+                if not command:
+                    problems.append(f"{item['item_id']}: missing provenance.from_trace for {fm}")
+                elif not isinstance(command, str) or not TRACE_COMMAND.fullmatch(command):
+                    problems.append(f"{item['item_id']}: invalid trace command for {fm}")
+            extra = set(trace_map) - set(item.get("failure_modes") or [])
+            problems += [f"{item['item_id']}: provenance has unassigned trace mode {fm}"
+                         for fm in sorted(extra)]
     ids = [it.get("item_id") for it in items]
     problems += [f"{i}: duplicate item_id" for i in sorted({i for i in ids if ids.count(i) > 1})]
     cids = [it.get("claim_id") for it in items]
