@@ -29,7 +29,7 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 
 FM_CODE = re.compile(r"FM-\d{2}")
 
-TRACE_COMMAND = re.compile(r"python -m lab9\\.trace_case --shape [a-z_]+ --claim C-\\d{3} --seed 11")
+TRACE_COMMAND = re.compile(r"python -m lab9\.trace_case --shape [a-z_]+ --claim C-\d{3} --seed 11")
 
 # Isolated trace recipes. trace_case registers each bug switch with no_override.
 TRACE_EVIDENCE: dict[str, str] = {
