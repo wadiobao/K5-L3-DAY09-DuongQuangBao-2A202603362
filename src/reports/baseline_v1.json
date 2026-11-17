@@ -1,9 +1,9 @@
 {
-  "run_id": "E-swarm-20261117-d4ce",
+  "run_id": "E-swarm-20261117-3f9f",
   "shape": "swarm",
   "manifest": {
     "eval_set": "data/eval/eval_set_v1.jsonl",
-    "eval_set_sha": "d4cea2330993",
+    "eval_set_sha": "3f9f98903afd",
     "items": 14,
     "seeds": [
       11,
@@ -14,7 +14,7 @@
     ],
     "metric_spec_version": "1.0",
     "llm": "MockLLM",
-    "python": "3.14.2"
+    "python": "3.13.18"
   },
   "rows": [
     {
