@@ -16,8 +16,9 @@ metrics:
      threshold: {min: 0.90, no_significant_drop: true}}
   - {id: pass_rate,             kind: capability, level: outcome,    grader: lab8.metrics.trial_pass, blocking: true,
      threshold: {min: 0.85, no_significant_drop: true}}
-  # TODO M6: add a blocking pass_hat_5 metric. Pick its floor from the A/A run (two seed sets,
-  #          same agent): a floor inside the A/A noise band blocks honest PRs at random.
+  # Provisional floor is 0 until the required A/A calibration establishes a defensible threshold.
+  # Replace 0.0 after comparing two seed sets for the same agent; do not treat this as calibrated.
+  - {id: pass_hat_5,             kind: capability, level: outcome, grader: lab9.eval.aggregate, threshold: {min: 0.0}, blocking: true}
   - {id: cost_per_success,      kind: system,     level: system,     grader: lab8.metrics.summarize, threshold: {max_increase: 0.10}, blocking: false}
   - {id: reply_matches_ledger, kind: capability, level: outcome, grader: code, blocking: true,
      threshold: {min: 0.95, no_significant_drop: true}}  # FM-08: carried over from v1
