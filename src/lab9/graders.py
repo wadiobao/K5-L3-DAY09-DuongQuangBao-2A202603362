@@ -10,7 +10,8 @@ that still grades correctly. Money and approvals are always code, never a judge.
 
 from __future__ import annotations
 
-from dataclasses import dataclass,re
+from dataclasses import dataclass
+import re
 from typing import Any
 
 from pydantic_evals.evaluators import Evaluator, EvaluationReason, EvaluatorContext
