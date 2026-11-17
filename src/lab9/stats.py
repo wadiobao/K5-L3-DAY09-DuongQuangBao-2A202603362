@@ -61,19 +61,52 @@ def rogan_gladen(observed_rate: float, sensitivity: float, specificity: float) -
 
 def paired_bootstrap(a: Sequence[float], b: Sequence[float], *, n_resamples: int = 1000,
                      rng: int = 2027, confidence: float = 0.95) -> tuple[float, float, float]:
-    """(docstring giữ nguyên)"""
-    import numpy as np
-    from scipy.stats import bootstrap
+    """Return mean(a-b) and a paired percentile-bootstrap confidence interval.
 
-    a_arr, b_arr = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
-    if a_arr.shape != b_arr.shape or a_arr.ndim != 1 or a_arr.size == 0:
-        raise ValueError("a and b must be non-empty 1-D sequences of the same length (same items, same order)")
-    if np.array_equal(a_arr, b_arr):
-        return 0.0, 0.0, 0.0
-    res = bootstrap((a_arr, b_arr), lambda x, y, axis=-1: np.mean(x, axis=axis) - np.mean(y, axis=axis),
-                    paired=True, vectorized=True, method="percentile", n_resamples=n_resamples,
-                    confidence_level=confidence, rng=np.random.default_rng(rng))
-    return float(a_arr.mean() - b_arr.mean()), float(res.confidence_interval.low), float(res.confidence_interval.high)
+    Uses the exact empirical bootstrap distribution when it has at most 200,000
+    resamples; otherwise uses deterministic Monte Carlo resampling. This keeps
+    the evaluator independent of NumPy/SciPy.
+    """
+    import itertools
+    import random
+
+    if len(a) != len(b) or not a:
+        raise ValueError("a and b must be non-empty sequences of the same length (same items, same order)")
+    if isinstance(n_resamples, bool) or not isinstance(n_resamples, int) or n_resamples < 1:
+        raise ValueError("n_resamples must be a positive integer")
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1")
+
+    differences = [float(x) - float(y) for x, y in zip(a, b, strict=True)]
+    observed = sum(differences) / len(differences)
+    if all(value == differences[0] for value in differences):
+        return observed, observed, observed
+
+    n = len(differences)
+    exact_count = n ** n
+    if exact_count <= 200_000:
+        samples = (
+            sum(differences[index] for index in indices) / n
+            for indices in itertools.product(range(n), repeat=n)
+        )
+        estimates = sorted(samples)
+    else:
+        randomizer = random.Random(rng)
+        estimates = sorted(
+            sum(differences[randomizer.randrange(n)] for _ in range(n)) / n
+            for _ in range(n_resamples)
+        )
+
+    alpha = (1.0 - confidence) / 2.0
+
+    def percentile(values: list[float], probability: float) -> float:
+        position = (len(values) - 1) * probability
+        lower = int(position)
+        upper = min(lower + 1, len(values) - 1)
+        fraction = position - lower
+        return values[lower] + (values[upper] - values[lower]) * fraction
+
+    return observed, percentile(estimates, alpha), percentile(estimates, 1.0 - alpha)
 
 
 def _validate_pass_k_args(n: int, c: int, k: int) -> None:
