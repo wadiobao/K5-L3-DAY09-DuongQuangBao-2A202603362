@@ -1,35 +1,69 @@
 # Research card
 
-File này nằm cố định ở `report/team/research_card.md`; `python -m lab8.check_submission` đọc cột "Nhóm điền" bằng máy.
+**Người thực hiện:** Dương Quang Bảo — 2A202503362  
+**Hướng nghiên cứu:** R4 · Evaluation confounders
 
-Phần này nối tiếp phần mini research ở buổi lý thuyết (slide 62–63). Chọn **một** câu R1–R4, điền 6 dòng, rồi biến nó thành **một ablation** chạy được trong lab: giữ nguyên model (MockLLM), tool, seed, corpus và giá, chỉ thay đổi một biến.
+## Phiếu nghiên cứu
 
-| Câu | Nguồn (thư viện tham khảo, slide 68–69) | Câu hỏi gợi ý cho lab |
-| --- | --- | --- |
-| R1 · Scaling | Google Research 2026, *Towards a Science of Scaling Agent Systems* | Task claims chủ yếu tuần tự hay song song được? Dự đoán thêm investigator sẽ làm pass rate và cost/success thay đổi thế nào. |
-| R2 · Failure taxonomy | MAST, NeurIPS 2025, *Why Do Multi-Agent LLM Systems Fail?* | Các trial fail của swarm (seed 55) thuộc nhóm nào: lỗi giao việc, lệch mục tiêu, hay lỗi kiểm chứng? |
-| R3 · Architecture choices | AgentArch, AACL 2026 | Nếu đổi topology mà giữ nguyên mọi thứ khác, biến nào phải cố định để kết luận còn đúng? |
-| R4 · Evaluation confounders | EMNLP 2026, *Rethinking Evaluation of MAS Efficiency* | Làm sao chứng minh chênh lệch giữa A/B/C/D là do topology, không phải do prompt, tool hay seed? |
+| Field | Nội dung |
+|---|---|
+| CÂU | R4 — Evaluation confounders |
+| SOURCE | EMNLP 2026, *Rethinking Evaluation of MAS Efficiency* (nguồn tham khảo được liệt kê trong template bài lab; cần bổ sung URL/bản paper chính thức nếu giảng viên yêu cầu trích dẫn đầy đủ). |
+| CLAIM | Khi so sánh hiệu quả các kiến trúc multi-agent, cần kiểm soát các yếu tố gây nhiễu như model, tool, seed, corpus, pricing và evaluator. Nếu nhiều biến thay đổi cùng lúc, không thể quy kết chênh lệch metric cho riêng topology. |
+| BOUNDARY | Thực nghiệm hiện có sử dụng MockLLM deterministic, eval set mô phỏng LogiX-VN và seed cố định. Kết quả chỉ mô tả setup này, không đại diện model thật hoặc môi trường production. |
+| HYPOTHESIS | Nếu thay đổi topology trong khi giữ nguyên model, tools, seed, corpus, pricing và evaluator, pass rate/cost có thể thay đổi do cách phối hợp agent. Multi-agent có thể tăng khả năng xử lý nhưng cũng có thể tăng cost và variance; topology phức tạp hơn không mặc nhiên tốt hơn. |
+| METHOD | Giữ cố định MockLLM, tool registry, eval set SHA, seeds, pricing, evaluator và môi trường. Chỉ thay đổi topology: workflow, single, orchestrator hoặc swarm. |
+| FAILURE / METRIC | Theo dõi `pass_rate`, `pass_hat_5`, variance, `cost_per_success`, `approval_bypass` và `secret_leak`. Không chấp nhận cải thiện pass rate nếu phát sinh safety failure. |
 
-## Phiếu của nhóm
+## Kết quả thực nghiệm hiện có
 
-Điền vào cột cuối. Không xóa hai cột đầu.
+### Baseline v2
 
-| Field | Hướng dẫn | Nhóm điền |
-| --- | --- | --- |
-| CÂU | R1 / R2 / R3 / R4 | |
-| SOURCE | Paper/blog, năm, URL, loại bằng chứng (benchmark, production report, blog kinh nghiệm) | |
-| CLAIM | Một kết luận gốc của nguồn. Không viết rộng hơn phạm vi paper | |
-| BOUNDARY | Model / dataset / setup giới hạn kết luận đó | |
-| HYPOTHESIS | Nếu đổi shape A→B (hoặc bật/tắt một thành phần), metric X sẽ đổi theo hướng nào, khoảng bao nhiêu | |
-| METHOD | Biến giữ cố định: model, tools, seed, corpus, giá, evaluator. Biến duy nhất được thay đổi: … | |
-| FAILURE / METRIC | Một lỗi dự kiến và cách đo nó: pass rate, pass^5, variance, cost/success, leak, bypass | |
+Nguồn: `src/reports/baseline_v2.json`.
 
-## Kết quả ablation
+- Run ID: `E-swarm-20261117-f8df`.
+- Shape: `swarm`.
+- Eval set SHA: `f8df34ea9092`.
+- 28 items × 5 seeds = 140 trials.
+- `pass_rate`: 97.86%.
+- `pass_hat_5`: 89.29%.
+- `approval_bypass`: 0/140.
+- `secret_leak`: 0/140.
+- `cost_per_success`: 50.8077 đơn vị cost mô phỏng.
 
-- Lệnh đã chạy (copy nguyên văn):
-- Run id / file report:
-- Kết quả so với hypothesis (đúng / sai / không kết luận được), kèm số liệu:
-- Giới hạn: MockLLM không phải model sản xuất, latency là `unavailable`.
+### A/A calibration
 
-Muốn đi xa hơn một ablation để lấy điểm cộng thì xem [docs/bonus_topics.md](../../docs/bonus_topics.md).
+Nguồn: `src/reports/aa_calibration.json`.
+
+- Nhóm A seeds: 121, 132, 143, 154, 165.
+- Nhóm B seeds: 176, 187, 198, 209, 220.
+- `pass_rate`: 0.978571 ở cả hai nhóm.
+- `pass_hat_5`: 0.892857 ở cả hai nhóm.
+- Delta: 0; CI 95% được report ghi nhận [0, 0].
+
+Hai nhóm seed cho kết quả giống nhau trên setup hiện tại. Điều này cho thấy phép đo ổn định với MockLLM deterministic, nhưng không chứng minh model thật không có biến động.
+
+## Phân biệt A/A và ablation topology
+
+A/A calibration kiểm tra độ ổn định của setup đánh giá giữa hai nhóm seed. Nó **không** phải là ablation topology và không chứng minh swarm tốt hơn workflow, single hoặc orchestrator.
+
+Tại thời điểm lập phiếu, chưa có artifact benchmark so sánh bốn shape trên cùng corpus và seed. Các module `workflow.py`, `single.py`, `orchestrator.py` vẫn là stub `not_implemented`; do đó chưa thể kết luận hypothesis về topology đúng hay sai.
+
+## Kế hoạch ablation cần thực hiện
+
+Sau khi hoàn thiện ba shape còn lại:
+
+1. Dùng chung một eval corpus và xác nhận SHA.
+2. Dùng cùng danh sách seed cho cả bốn shape.
+3. Giữ nguyên model, tools, pricing, evaluator và môi trường.
+4. Chỉ thay đổi shape.
+5. Sinh `src/reports/benchmark.json`.
+6. So sánh pass rate, pass^5, seed min–max, variance, cost/success và safety metrics.
+
+Lệnh benchmark cần dùng đúng CLI được khai báo trong repository sau khi xác nhận implementation và help của module; không ghi nhận một lệnh chưa chạy như kết quả thực nghiệm.
+
+## Kết luận
+
+Kết quả hiện có xác nhận baseline swarm v2 đạt pass rate 97.86%, pass_hat_5 89.29%, không ghi nhận approval bypass hoặc secret leak trong 140 trials. A/A calibration cho delta bằng 0 trên MockLLM deterministic.
+
+Tuy nhiên, chưa có ablation topology hợp lệ để xác định shape nào tốt nhất. Kết luận về lợi ích của multi-agent cần chờ benchmark bốn shape với các yếu tố còn lại được kiểm soát.
